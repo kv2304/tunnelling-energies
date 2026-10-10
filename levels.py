@@ -18,6 +18,7 @@ A = 1.0                     # well width, nm
 V0 = 0.30                   # well depth, eV
 W_FIT = 2.0                 # nm 
 M = 2100                    # interior points
+W, W_B, LAMDA_B = 8.0, 1.0, -0.03
 
 
 def hamiltonian(x, lamda, w, a=A, V0=V0):
@@ -110,14 +111,19 @@ def sweep(x, ws, n_lam=21, span=12.0, n_track=2, a=A, V0=V0):
     return lamdas, E, two_t
 
 
+def two_level_gap(lamda, d, two_t):
+    """The 2x2 model in the localised basis: d lamda the energy difference
+    the tilt opens between the wells, two_t the gap at lamda = 0."""
+    return np.sqrt((d * lamda) ** 2 + two_t ** 2)
+
+
 def measure(x, run, a=A, V0=V0) -> dict:
     """
     Computes bound states, orders states, and performs independent
     cross-checks of d and kappa (fit vs direct, plus grid convergence),
-    returning results as a dictionary.
+    returning the measured results as a dictionary.
     """
-    W, W_B, LAMDA_B = 8.0, 1.0, -0.03
-    h = (x[-1] - x[0]) / (x.size - 1)
+    h =(x[-1] - x[0]) / (x.size - 1)
     lamda0 = np.array([0.0])
     ws, V0s = run["ws"], run["V0s"]
     lamdas, Esw, two_t, EV = run["lamdas"], run["E"], run["two_t"], run["EV"]
@@ -138,11 +144,6 @@ def measure(x, run, a=A, V0=V0) -> dict:
     kappa = np.sqrt((V0 - Esw[:, i0, :].mean(axis=1)) / HBAR2_OVER_2M)
 
     # tilt and coupling, two ways each: fitted, and read off the wavefunction
-    def two_level_gap(lamda, d, two_t):
-        """The 2x2 model in the localised basis: d lamda the energy difference
-        the tilt opens between the wells, two_t the gap at lamda = 0."""
-        return np.sqrt((d * lamda) ** 2 + two_t ** 2)
-
     (d_fit, t2_fit), _ = curve_fit(two_level_gap, lamdas[iw], Esw[iw, :, 1] - Esw[iw, :, 0], p0=(1.0, two_t[iw]))
     mL = (x >= -(ws[iw] / 2 + a)) & (x < -ws[iw] / 2)
     mR = (x > ws[iw] / 2) & (x < ws[iw] / 2 + a)
@@ -170,32 +171,20 @@ def measure(x, run, a=A, V0=V0) -> dict:
         xc = -Lc / 2 + hc * np.arange(1, Mc + 1)
         conv.append(np.polyfit(ws[keep], [np.log(np.diff(track(xc, lamda0, wc, 2, a, V0)[0][0])[0]) for wc in ws[keep]], 1)[0])
 
-    # V(x) backdrops, and psi across the one lambda range shown
-    Eb, psib, _ = track(x, np.array([LAMDA_B]), W_B, 2, a, V0)
-    Ef, psif, _ = track(x, lamdas[iw], ws[iw], 2, a, V0)
-    pl = (psif[:, mL, :] ** 2).sum(axis=1)
-    pr = (psif[:, mR, :] ** 2).sum(axis=1)
-
     return dict(
         A=a, W=W, V0=V0, h=h, ws=ws, V0s=V0s, keep=keep, two_t=two_t,
-        W_B=W_B, LAMDA_B=LAMDA_B, W_fig=ws[iw], lamda_fig=lamdas[iw],
-        w_first=ws[0], lamda_first=lamdas[0].min(),
         E8=E8, psi8=psi8, nodes=nodes,
         ovl=ovl, swaps=swaps,
         two_t_fig=two_t[iw], gV=gV, d_fit=d_fit, d_psi=d_psi, t2_fit=t2_fit,
         slope=slope, icept=icept, slope_se=np.sqrt(cov[0, 0]),
         k_ind=kappa[keep].mean(), sV=sV, kV=kV.mean(axis=1),
-        floor=floor, gap_fl=gap_fl, conv=conv,
-        Vdw=hamiltonian(x, 0.0, W, a, V0)[1], Vb=hamiltonian(x, LAMDA_B, W_B, a, V0)[1],
-        Eb=Eb[0], pb=(psib[0] / np.sqrt(h)) ** 2,
-        tB=np.diff(track(x, lamda0, W_B, 2, a, V0)[0][0])[0],
-        E_fig=Ef, frac=pl / (pl + pr), mid=Ef.mean(axis=1),
-        fit_gap=two_level_gap(lamdas[iw], d_fit, t2_fit))
+        floor=floor, gap_fl=gap_fl, conv=conv)
 
 
-def figures(x, results, outdir="figures"):
+def figures(x, run, results, outdir="figures"):
     """
-    Generate figures using results dict from measure.
+    Generate figures from the results dict of measure, computing the
+    potentials and states drawn behind them from x and run.
     """
     import matplotlib.pyplot as plt
     from matplotlib.transforms import Bbox
@@ -215,12 +204,14 @@ def figures(x, results, outdir="figures"):
     PAIR = (4.9, 3.2)          
     LEG = dict(frameon=False, columnspacing=1.1, handlelength=1.3, handletextpad=0.5, borderpad=0.0)
     A, W, V0, h = results["A"], results["W"], results["V0"], results["h"]
-    W_B, LAMDA_B, W_fig = results["W_B"], results["LAMDA_B"], results["W_fig"]
+    ws, two_t, lamdas = results["ws"], results["two_t"], run["lamdas"]
+    iw = int(np.argmin(np.abs(ws - W_FIT)))
+    W_fig = ws[iw]
     E = results["E8"]
 
     # setup.svg: the double wells at the true first point of a sweep
-    W_A, lam_s = results["w_first"], results["lamda_first"]
-    two_t_A = float(results["two_t"][0])       # 2t at w_first
+    W_A, lam_s = ws[0], lamdas[0].min()
+    two_t_A = float(two_t[0])       # 2t at w_first
     Vd = hamiltonian(x, lam_s, W_A, A, V0)[1]
     arr = dict(arrowstyle="<->", lw=0.8, color="0.35", shrinkA=0, shrinkB=0)
 
@@ -248,7 +239,7 @@ def figures(x, results, outdir="figures"):
     fig.savefig(f"{outdir}/setup.svg")
 
     # spectrum.svg: which energies the setup allows, with the pair's split inset
-    Vdw = results["Vdw"]
+    Vdw = hamiltonian(x, 0.0, W, A, V0)[1]
     gap_neV = (E[1] - E[0]) * 1e9
     arr_i = dict(arrowstyle="<->", lw=0.7, color="0.35", shrinkA=0, shrinkB=0)
 
@@ -306,8 +297,10 @@ def figures(x, results, outdir="figures"):
     fig.savefig(f"{outdir}/eigenstates.svg", bbox_inches=Bbox([[0, 0], PAIR]))
 
     # tilted_wells.svg: |psi|^2 on baselines at E_n, once the tilt localises them
-    Eb, pb, Vb = results["Eb"], results["pb"], results["Vb"]
-    tB = float(results["tB"])
+    Eb, psib, _ = track(x, np.array([LAMDA_B]), W_B, 2, A, V0)
+    Eb, pb = Eb[0], (psib[0] / np.sqrt(h)) ** 2
+    Vb = hamiltonian(x, LAMDA_B, W_B, A, V0)[1]
+    tB = float(np.diff(track(x, np.array([0.0]), W_B, 2, A, V0)[0][0])[0])
     scale = 0.042 / pb.max()
 
     fig, ax = plt.subplots(figsize=(4.2, 3.1))
@@ -329,9 +322,14 @@ def figures(x, results, outdir="figures"):
     fig.savefig(f"{outdir}/tilted_wells.svg")
 
     # avoided_crossing.svg: the crossing, and the character exchange with it
-    lf, Ef, frac = results["lamda_fig"], results["E_fig"], results["frac"]
-    d_fit, t2_fit = results["d_fit"], results["t2_fit"]
-    mid, fit_gap = results["mid"], results["fit_gap"]
+    lf, d_fit, t2_fit = lamdas[iw], results["d_fit"], results["t2_fit"]
+    Ef, psif, _ = track(x, lf, W_fig, 2, A, V0)
+    mL = (x >= -(W_fig / 2 + A)) & (x < -W_fig / 2)
+    mR = (x > W_fig / 2) & (x < W_fig / 2 + A)
+    pl = (psif[:, mL, :] ** 2).sum(axis=1)
+    pr = (psif[:, mR, :] ** 2).sum(axis=1)
+    frac = pl / (pl + pr)
+    mid, fit_gap = Ef.mean(axis=1), two_level_gap(lf, d_fit, t2_fit)
     lo, hi = (Ef * 1e3).min(), (Ef * 1e3).max()
 
     fig, (ax0, ax1) = plt.subplots(1, 2, figsize=(7.2, 2.9))
@@ -359,7 +357,7 @@ def figures(x, results, outdir="figures"):
     fig.savefig(f"{outdir}/avoided_crossing.svg")
 
     # log_gap.svg: L one depth against its own kappa, R six depths each against theirs
-    ws, two_t, keep = results["ws"], results["two_t"], results["keep"]
+    keep = results["keep"]
     slope, icept, k_ind = results["slope"], results["icept"], results["k_ind"]
     V0s, gV = results["V0s"], results["gV"]
     blues = plt.get_cmap("Blues")(np.linspace(0.45, 0.97, V0s.size))
@@ -436,5 +434,5 @@ if __name__ == "__main__":
           f"{gf[0]:.1e}, {gf[1]:.1e}, {gf[2]:.1e} | last below the floor")
     print(f"convergence     slope range, h/3 and box   {slope_range:.1e} nm^-1" f"   ({slope_range / abs(np.mean(conv)):.3%})")
 
-    figures(x, results)
+    figures(x, run, results)
     
