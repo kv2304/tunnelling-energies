@@ -54,8 +54,8 @@ Complete method and analysis can be read in [docs/](docs/).
 ## Run
 
 ```
-git clone https://github.com/kv2304/quantum-energy-levels.git
-cd quantum-energy-levels
+git clone https://github.com/kv2304/tunnelling-energies.git
+cd tunnelling-energies
 pip install -r requirements.txt
 python levels.py     # ~3s, redraws figures/
 ```
