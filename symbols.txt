@@ -6,7 +6,7 @@ a        : 1.0 nm                     well width
 V0       : 0.30 eV                    well depth, and the height of the barrier and of the region outside the wells
 w        : {1, 1.5, 2, ..., 8} nm     barrier width, swept
 W_FIT    : 2.0 nm                     the log-gap slope is fitted over w >= W_FIT only
-lamda    : -12*2t to +12*2t, eV       tilt; left floor -lamda/2, right +lamda/2
+lmbda    : -12*2t to +12*2t, eV       tilt; left floor -lmbda/2, right +lmbda/2
 
 M        : 2100                       interior grid points, so H is M x M
 h        : 0.010 nm                   grid spacing
@@ -22,13 +22,14 @@ psi      : nm^(-1/2)                  the matching eigenvector, on the grid
 
 phi_L    : nm^(-1/2)                  orbital localised in the left well
 phi_R    : nm^(-1/2)                  orbital localised in the right well
-eps      : d*lamda, eV                energy difference the tilt opens between the localised states
-t        : eV                         tunnel coupling; 2t is the gap at lamda = 0
+eps      : d*lmbda, eV                energy difference the tilt opens between the localised states
+t        : eV                         tunnel coupling; 2t is the gap at lmbda = 0
 d        : 0.8087                     fraction of |psi|^2 inside one well
 kappa    : 2.1747 nm^-1               decay rate under the barrier, sqrt(2m(V0 - E))/hbar
 1/kappa  : 0.46 nm                    how far psi reaches into the barrier
 
-M_WIDE   : 2704, L = 27.05 nm         wider box, local to measure: w = 11-13 nm, convergence
-M_FINE   : 6302, L = 21.01 nm         same box at h/3, the spacing leg of the same check
+m_wide   : 2700, L = 27.01 nm         wider box: w = 11-13 nm, convergence
+ws_floor : 11, 12, 13 nm              separations whose gaps reach the float64 floor
+m_fine   : 6302, L = 21.01 nm         same box at h/3, the spacing leg of the same check
 
 HBAR2_OVER_2M : 0.0380998 eV nm^2     hbar^2 / 2 m_e
